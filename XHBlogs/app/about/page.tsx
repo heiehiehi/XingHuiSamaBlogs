@@ -4,6 +4,7 @@ import path from 'path';
 import matter from 'gray-matter';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm'; // 🌟 引入 GFM 以支持 ~~删除线~~
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeHighlight from 'rehype-highlight';
@@ -45,16 +46,31 @@ export default async function AboutPage() {
 
   try {
     const fileContents = fs.readFileSync(fullPath, 'utf8');
-    const { data, content } = matter(fileContents);
+    // 🌟 改为 let，以便进行文本预清洗
+    let { data, content } = matter(fileContents);
     if (data.cover) coverImage = data.cover;
+
+    // ==========================================
+    // 🌟 解析前物理清洗区
+    // ==========================================
+    // 1. 强行给没有语言标记的代码块加上 cpp 标签，防止侦测失败
+    content = content.replace(/^```\s*$/gm, '```cpp');
+    // 2. 强行修复数字列表缺少空格导致无法渲染为列表的 Bug (1.百度 -> 1. 百度)
+    content = content.replace(/^(\s*\d+)\.([^ \n])/gm, '$1. $2');
+    // ==========================================
 
     const processedContent = await unified()
       .use(remarkParse)
+      .use(remarkGfm) // 🌟 挂载 GFM 解析
       .use(remarkMath)
       .use(remarkRehype, { allowDangerousHtml: true })
-      // 🌟 核心修复 1：开启自动语言侦测！
+      // 🌟 核心修复：开启自动语言侦测，并限制语言白名单！
       // @ts-ignore
-      .use(rehypeHighlight, { detect: true, ignoreMissing: true })
+      .use(rehypeHighlight, {
+        detect: true,
+        ignoreMissing: true,
+        subset: ['cpp', 'c', 'python', 'java', 'javascript', 'typescript', 'go', 'rust', 'bash', 'json', 'html', 'css', 'sql', 'xml']
+      })
       .use(rehypeKatex)
       .use(rehypeStringify, { allowDangerousHtml: true })
       .process(content);
@@ -78,6 +94,7 @@ export default async function AboutPage() {
       <PageTransition>
         <main className="w-[95%] md:w-[90%] max-w-4xl mx-auto mt-24 md:mt-28 relative z-10">
           <Suspense fallback={<div className="h-96 flex items-center justify-center text-slate-500 font-bold animate-pulse">正在载入档案...</div>}>
+            {/* 🌟 组件原封不动，安全可靠 */}
             <AboutClient
               contentHtml={contentHtml}
               coverImage={coverImage}

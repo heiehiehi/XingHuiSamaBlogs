@@ -15,6 +15,13 @@ import { Color } from '@tiptap/extension-color';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 
+// 🌟 引入 Markdown 插件
+import { Markdown } from 'tiptap-markdown';
+
+// 🌟 引入满血版 C++ 语法高亮
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { createLowlight, all } from 'lowlight';
+
 import {
   Undo2, Redo2, Eraser, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, List, ListOrdered, ListTodo,
@@ -22,6 +29,8 @@ import {
   Type, ImageIcon, Quote, RemoveFormatting, ChevronDown,
   Pipette, Hash, Check, Link2, Superscript as SupIcon, Subscript as SubIcon, Minus, Palette, Lock
 } from 'lucide-react';
+
+const lowlight = createLowlight(all);
 
 const CustomImage = Image.extend({
   addAttributes() {
@@ -89,7 +98,15 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
-        codeBlock: { HTMLAttributes: { class: 'bg-slate-950 text-indigo-300 p-8 rounded-[2rem] font-mono my-8' } },
+        codeBlock: false, // 🌟 必须关掉原生黑白代码块，把位置让给下面的高亮引擎
+      }),
+      // 🌟 【修复 1】：把丢失的高亮引擎挂载回来，让代码拥有颜色！
+      CodeBlockLowlight.configure({
+        lowlight,
+        defaultLanguage: 'cpp',
+        HTMLAttributes: {
+          class: 'bg-[#282c34] text-[#abb2bf] p-6 rounded-[1.5rem] font-mono my-6 overflow-x-auto shadow-inner'
+        },
       }),
       Underline, Subscript, Superscript, TextStyle, Color, FontSize, CustomImage,
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-indigo-500 underline cursor-pointer font-bold' } }),
@@ -118,14 +135,10 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         if (onChange) onChange();
       }
     },
-    // 🌟 终极妥协大法：直接在源头把 P 标签拆开，填入真实的换行字符！
     getContent: () => {
       if (!editor) return '';
       let html = editor.getHTML();
 
-      // 暴力替换：匹配所有形式的空段落，直接替换为一个包含 <br> 和零宽空格的结构
-      // 在上一步咱们后端的 python 脚本里，已经写了 re.sub(r'<br\s*\/?>', '\n\n', md_content)
-      // 只要这里生成了纯正的 <br>，后端就会把它强行转成 \n\n，绝对不会丢！
       html = html.replace(/<p><\/p>/gi, '<br>&zwj;');
       html = html.replace(/<p><br><\/p>/gi, '<br>&zwj;');
 
@@ -136,7 +149,11 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
   useEffect(() => {
     if (!editor || !initialContent) return;
     if (loadedContentRef.current !== initialContent) {
-      editor.commands.setContent(initialContent, false);
+
+      // 🌟 你的代码：这里一刀未动！绝不触发分块 bug！
+      const safeContent = initialContent.replace(/~~([\s\S]*?)~~/g, '<s>$1</s>');
+
+      editor.commands.setContent(safeContent, false);
       loadedContentRef.current = initialContent;
     }
   }, [editor, initialContent]);
@@ -174,7 +191,39 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
 
   return (
     <div className="flex flex-col h-full w-full min-h-0 bg-transparent relative">
-      <style dangerouslySetInnerHTML={{ __html: `.editor-content-area h1 { font-size: 3rem !important; font-weight: 950 !important; margin-bottom: 2rem !important; margin-top: 3rem !important; line-height: 1.1; color: inherit; } .editor-content-area h2 { font-size: 2.2rem !important; font-weight: 800 !important; margin-bottom: 1.5rem !important; margin-top: 2rem !important; } .editor-content-area h3 { font-size: 1.5rem !important; font-weight: 700 !important; margin-bottom: 1rem !important; } .editor-content-area p { font-size: 1.15rem !important; line-height: 1.85 !important; } .editor-content-area ul { list-style-type: disc !important; padding-left: 1.5rem !important; } .editor-content-area ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }`}} />
+      <style dangerouslySetInnerHTML={{ __html: `
+        .editor-content-area h1 { font-size: 3rem !important; font-weight: 950 !important; margin-bottom: 2rem !important; margin-top: 3rem !important; line-height: 1.1; color: inherit; } 
+        .editor-content-area h2 { font-size: 2.2rem !important; font-weight: 800 !important; margin-bottom: 1.5rem !important; margin-top: 2rem !important; } 
+        .editor-content-area h3 { font-size: 1.5rem !important; font-weight: 700 !important; margin-bottom: 1rem !important; } 
+        .editor-content-area p { font-size: 1.15rem !important; line-height: 1.85 !important; } 
+        .editor-content-area ul { list-style-type: disc !important; padding-left: 1.5rem !important; } 
+        .editor-content-area ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }
+        
+        .editor-content-area s, .editor-content-area del { text-decoration-line: line-through !important; opacity: 0.6; }
+
+        /* 🌟 【修复 2】：果冻极客风代码字体！更圆滑、更饱满！ */
+        .editor-content-area pre code, .editor-content-area p code {
+          font-family: ui-rounded, 'Quicksand', 'Nunito', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, monospace !important;
+          font-variant-ligatures: contextual !important;
+          font-weight: 500 !important;
+          letter-spacing: 0.02em !important;
+        }
+        
+        .editor-content-area p code {
+           background-color: rgba(99, 102, 241, 0.1) !important; color: #6366f1 !important; padding: 0.2rem 0.4rem !important; border-radius: 0.5rem !important; font-size: 0.85em !important;
+        }
+
+        /* 🌟 【修复 3】：注入 Atom One Dark 的代码颜色规则，让关键字亮起来！ */
+        .editor-content-area pre code .hljs-comment, .editor-content-area pre code .hljs-quote { color: #5c6370; font-style: italic; }
+        .editor-content-area pre code .hljs-doctag, .editor-content-area pre code .hljs-keyword, .editor-content-area pre code .hljs-formula { color: #c678dd; }
+        .editor-content-area pre code .hljs-keyword.type_, .editor-content-area pre code .hljs-type { color: #c678dd; } 
+        .editor-content-area pre code .hljs-section, .editor-content-area pre code .hljs-name, .editor-content-area pre code .hljs-selector-tag, .editor-content-area pre code .hljs-deletion, .editor-content-area pre code .hljs-subst { color: #e06c75; }
+        .editor-content-area pre code .hljs-literal { color: #56b6c2; }
+        .editor-content-area pre code .hljs-string, .editor-content-area pre code .hljs-regexp, .editor-content-area pre code .hljs-addition, .editor-content-area pre code .hljs-attribute, .editor-content-area pre code .hljs-meta-string { color: #98c379; }
+        .editor-content-area pre code .hljs-built_in, .editor-content-area pre code .hljs-class .hljs-title, .editor-content-area pre code .hljs-title.class_ { color: #e6c07b; } 
+        .editor-content-area pre code .hljs-attr, .editor-content-area pre code .hljs-variable, .editor-content-area pre code .hljs-template-variable, .editor-content-area pre code .hljs-selector-class, .editor-content-area pre code .hljs-selector-attr, .editor-content-area pre code .hljs-selector-pseudo, .editor-content-area pre code .hljs-number { color: #d19a66; }
+        .editor-content-area pre code .hljs-symbol, .editor-content-area pre code .hljs-bullet, .editor-content-area pre code .hljs-link, .editor-content-area pre code .hljs-meta, .editor-content-area pre code .hljs-selector-id, .editor-content-area pre code .hljs-title, .editor-content-area pre code .hljs-title.function_ { color: #61aeee; } 
+      `}} />
 
       <div className="shrink-0 px-12 pt-14 pb-4 flex items-center gap-4">
         <input
@@ -227,7 +276,13 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         </div>
 
         <div className="w-px h-6 bg-slate-400/20 mx-1" />
-        <div className="flex items-center gap-1"><Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}><Bold size={16}/></Btn><Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}><Italic size={16}/></Btn><Btn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive('underline')}><UnderlineIcon size={16}/></Btn><Btn onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}><Strikethrough size={16}/></Btn><Btn onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}><Code2 size={16}/></Btn></div>
+        <div className="flex items-center gap-1">
+          <Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}><Bold size={16}/></Btn>
+          <Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}><Italic size={16}/></Btn>
+          <Btn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive('underline')}><UnderlineIcon size={16}/></Btn>
+          <Btn onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}><Strikethrough size={16}/></Btn>
+          <Btn onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}><Code2 size={16}/></Btn>
+        </div>
         <div className="w-px h-6 bg-slate-400/20 mx-1" />
         <div className="flex items-center gap-1"><Btn onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })}><AlignLeft size={16}/></Btn><Btn onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })}><AlignCenter size={16}/></Btn><Btn onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })}><AlignRight size={16}/></Btn></div>
         <div className="w-px h-6 bg-slate-400/20 mx-1" />
