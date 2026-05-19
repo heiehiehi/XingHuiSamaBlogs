@@ -53,18 +53,56 @@ const FontSize = Extension.create({
   addCommands() { return { setFontSize: (fontSize: string) => ({ chain }) => chain().setMark('textStyle', { fontSize }).run() }; },
 });
 
+// 🌟 终极修复：彻底废弃 absolute 下拉框，升级为 Fixed 居中模态框 (Modal)！
+// 这样就能 100% 逃脱父级容器的 overflow 限制，绝对不可能再被遮挡！
 const CustomColorPicker = ({ activeColor, onSelect, onConfirm, recentColors, onClose }: any) => {
   const presets = ['#000000', '#6366F1', '#EC4899', '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#8B5CF6'];
   const [hex, setHex] = useState(activeColor);
   return (
     <>
-      <div className="fixed inset-0 z-[90]" onClick={onClose} />
-      <div className="absolute top-full mt-3 right-0 w-64 bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl rounded-[32px] p-6 shadow-2xl border border-white/40 dark:border-white/10 z-[100] animate-in fade-in zoom-in duration-200">
+      {/* 带有毛玻璃模糊效果的全屏遮罩 */}
+      <div className="fixed inset-0 z-[9990] bg-slate-900/20 dark:bg-black/40 backdrop-blur-sm transition-all" onClick={onClose} />
+
+      {/* 永远居中显示的调色板面板 */}
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl rounded-[32px] p-6 shadow-2xl border border-white/40 dark:border-white/10 z-[9999] animate-in fade-in zoom-in-95 duration-200">
         <div className="flex flex-col gap-5">
-          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color Palette</span><button onClick={() => onConfirm(hex)} className="w-8 h-8 flex items-center justify-center bg-indigo-500 text-white rounded-full"><Check size={16}/></button></div>
-          <div className="grid grid-cols-4 gap-2.5">{presets.map(c => <button key={c} onClick={() => { setHex(c); onSelect(c); }} className="w-full aspect-square rounded-xl border border-white/20" style={{ backgroundColor: c }} />)}</div>
-          <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-white/10"><Hash size={14} className="text-slate-400" /><input type="text" value={(hex || '').replace('#','')} onChange={(e) => { const val = '#' + e.target.value; setHex(val); if(val.length === 7) onSelect(val); }} className="bg-transparent w-full text-xs font-black outline-none uppercase text-slate-800 dark:text-slate-200" /></div>
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-white/10">{recentColors.map((c: string) => <button key={c} onClick={() => { setHex(c); onSelect(c); }} className="w-5 h-5 rounded-full border border-white/20" style={{ backgroundColor: c }} />)}</div>
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color Palette</span>
+            <button onClick={() => onConfirm(hex)} className="w-8 h-8 flex items-center justify-center bg-indigo-500 text-white rounded-full hover:scale-110 transition-transform">
+              <Check size={16}/>
+            </button>
+          </div>
+          <div className="grid grid-cols-4 gap-2.5">
+            {presets.map(c => (
+              <button
+                key={c}
+                onClick={() => { setHex(c); onSelect(c); }}
+                className="w-full aspect-square rounded-xl border border-white/20 hover:scale-110 hover:shadow-md transition-all"
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-white/10 shadow-inner">
+            <Hash size={14} className="text-slate-400" />
+            <input
+              type="text"
+              value={(hex || '').replace('#','')}
+              onChange={(e) => { const val = '#' + e.target.value; setHex(val); if(val.length === 7) onSelect(val); }}
+              className="bg-transparent w-full text-sm font-black outline-none uppercase text-slate-800 dark:text-slate-200"
+            />
+          </div>
+          {recentColors && recentColors.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-200/50 dark:border-white/10">
+              {recentColors.map((c: string) => (
+                <button
+                  key={c}
+                  onClick={() => { setHex(c); onSelect(c); }}
+                  className="w-6 h-6 rounded-full border border-white/40 shadow-sm hover:scale-125 transition-transform"
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -98,9 +136,8 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
-        codeBlock: false, // 🌟 必须关掉原生黑白代码块，把位置让给下面的高亮引擎
+        codeBlock: false,
       }),
-      // 🌟 【修复 1】：把丢失的高亮引擎挂载回来，让代码拥有颜色！
       CodeBlockLowlight.configure({
         lowlight,
         defaultLanguage: 'cpp',
@@ -149,10 +186,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
   useEffect(() => {
     if (!editor || !initialContent) return;
     if (loadedContentRef.current !== initialContent) {
-
-      // 🌟 你的代码：这里一刀未动！绝不触发分块 bug！
       const safeContent = initialContent.replace(/~~([\s\S]*?)~~/g, '<s>$1</s>');
-
       editor.commands.setContent(safeContent, false);
       loadedContentRef.current = initialContent;
     }
@@ -201,7 +235,6 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         
         .editor-content-area s, .editor-content-area del { text-decoration-line: line-through !important; opacity: 0.6; }
 
-        /* 🌟 引用块专属果冻极客风样式 */
         .editor-content-area blockquote {
           border-left: 4px solid #6366f1 !important;
           background-color: rgba(99, 102, 241, 0.05) !important;
@@ -221,7 +254,6 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
           color: #94a3b8 !important;
         }
 
-        /* 🌟 【修复 2】：果冻极客风代码字体！更圆滑、更饱满！ */
         .editor-content-area pre code, .editor-content-area p code {
           font-family: ui-rounded, 'Quicksand', 'Nunito', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, monospace !important;
           font-variant-ligatures: contextual !important;
@@ -233,7 +265,6 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
            background-color: rgba(99, 102, 241, 0.1) !important; color: #6366f1 !important; padding: 0.2rem 0.4rem !important; border-radius: 0.5rem !important; font-size: 0.85em !important;
         }
 
-        /* 🌟 【修复 3】：注入 Atom One Dark 的代码颜色规则，让关键字亮起来！ */
         .editor-content-area pre code .hljs-comment, .editor-content-area pre code .hljs-quote { color: #5c6370; font-style: italic; }
         .editor-content-area pre code .hljs-doctag, .editor-content-area pre code .hljs-keyword, .editor-content-area pre code .hljs-formula { color: #c678dd; }
         .editor-content-area pre code .hljs-keyword.type_, .editor-content-area pre code .hljs-type { color: #c678dd; } 
@@ -319,10 +350,36 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, EditorProps>(({ title, s
         {editor.isActive('image') && <div className="flex items-center gap-1 ml-4 bg-indigo-500/10 p-1 px-3 rounded-2xl border border-indigo-500/20 border-dashed animate-in slide-in-from-left">{['25%', '50%', '75%', '100%'].map(s => <button key={s} onClick={() => editor.chain().focus().updateAttributes('image', { width: s }).run()} className="px-2 py-1 text-[9px] font-bold hover:bg-white rounded-lg transition-all">{s}</button>)}</div>}
         <div className="flex-1" />
         <div className="flex items-center gap-4">
-          <div className="relative"><div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1.5 px-3 rounded-2xl border border-white/10 shadow-inner"><Palette size={14} className="text-slate-400 mr-2" /><div className="flex items-center gap-1 pr-2 border-r border-white/10">{textColors.map(c => <button key={c} onClick={() => editor.chain().focus().setColor(c).run()} onContextMenu={(e) => { e.preventDefault(); setTextColors(prev => prev.filter(col => col !== c)); }} className="w-4 h-4 rounded-full border border-white/40 hover:scale-125 transition-all shadow-sm" style={{ backgroundColor: c }} />)}</div><button onClick={() => { setShowTextPicker(!showTextPicker); setShowHighlightPicker(false); }} className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 shadow-xl flex items-center justify-center border border-indigo-500/30"><Pipette size={14} className="text-indigo-500" /></button></div>{showTextPicker && <CustomColorPicker activeColor="#6366F1" recentColors={textColors} onClose={() => setShowTextPicker(false)} onSelect={(c: string) => editor.chain().focus().setColor(c).run()} onConfirm={(c: string) => { if(!textColors.includes(c)) setTextColors(p => [c, ...p].slice(0, 6)); setShowTextPicker(false); }} />}</div>
-          <div className="relative"><div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1.5 px-3 rounded-2xl border border-white/10 shadow-inner"><Highlighter size={14} className="text-slate-400 mr-2" /><div className="flex items-center gap-1 pr-2 border-r border-white/10">{highlightColors.map(c => <button key={c} onClick={() => editor.chain().focus().setHighlight({ color: c }).run()} onContextMenu={(e) => { e.preventDefault(); setHighlightColors(prev => prev.filter(col => col !== c)); }} className="w-4 h-4 rounded-md border border-white/40 hover:scale-125 transition-all shadow-sm" style={{ backgroundColor: c }} />)}</div><button onClick={() => { setShowHighlightPicker(!showHighlightPicker); setShowTextPicker(false); }} className="w-8 h-8 rounded-xl bg-yellow-400 shadow-xl flex items-center justify-center border border-white/20"><Highlighter size={14} className="text-white" /></button></div>{showHighlightPicker && <CustomColorPicker activeColor="#FEF08A" recentColors={highlightColors} onClose={() => setShowHighlightPicker(false)} onSelect={(c: string) => editor.chain().focus().setHighlight({ color: c }).run()} onConfirm={(c: string) => { if(!highlightColors.includes(c)) setHighlightColors(p => [c, ...p].slice(0, 6)); setShowHighlightPicker(false); }} />}</div>
+          <div className="relative">
+            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1.5 px-3 rounded-2xl border border-white/10 shadow-inner">
+              <Palette size={14} className="text-slate-400 mr-2" />
+              <div className="flex items-center gap-1 pr-2 border-r border-white/10">
+                {textColors.map(c => <button key={c} onClick={() => editor.chain().focus().setColor(c).run()} onContextMenu={(e) => { e.preventDefault(); setTextColors(prev => prev.filter(col => col !== c)); }} className="w-4 h-4 rounded-full border border-white/40 hover:scale-125 transition-all shadow-sm" style={{ backgroundColor: c }} />)}
+              </div>
+              <button onClick={() => { setShowTextPicker(true); setShowHighlightPicker(false); }} className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 shadow-xl flex items-center justify-center border border-indigo-500/30 ml-1">
+                <Pipette size={14} className="text-indigo-500" />
+              </button>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1.5 px-3 rounded-2xl border border-white/10 shadow-inner">
+              <Highlighter size={14} className="text-slate-400 mr-2" />
+              <div className="flex items-center gap-1 pr-2 border-r border-white/10">
+                {highlightColors.map(c => <button key={c} onClick={() => editor.chain().focus().setHighlight({ color: c }).run()} onContextMenu={(e) => { e.preventDefault(); setHighlightColors(prev => prev.filter(col => col !== c)); }} className="w-4 h-4 rounded-md border border-white/40 hover:scale-125 transition-all shadow-sm" style={{ backgroundColor: c }} />)}
+              </div>
+              <button onClick={() => { setShowHighlightPicker(true); setShowTextPicker(false); }} className="w-8 h-8 rounded-xl bg-yellow-400 shadow-xl flex items-center justify-center border border-white/20 ml-1">
+                <Highlighter size={14} className="text-white" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* 将弹窗从 Toolbar 结构中抽离出来，独立于 Flex 布局之外！ */}
+      {showTextPicker && <CustomColorPicker activeColor="#6366F1" recentColors={textColors} onClose={() => setShowTextPicker(false)} onSelect={(c: string) => editor.chain().focus().setColor(c).run()} onConfirm={(c: string) => { if(!textColors.includes(c)) setTextColors(p => [c, ...p].slice(0, 6)); setShowTextPicker(false); }} />}
+      {showHighlightPicker && <CustomColorPicker activeColor="#FEF08A" recentColors={highlightColors} onClose={() => setShowHighlightPicker(false)} onSelect={(c: string) => editor.chain().focus().setHighlight({ color: c }).run()} onConfirm={(c: string) => { if(!highlightColors.includes(c)) setHighlightColors(p => [c, ...p].slice(0, 6)); setShowHighlightPicker(false); }} />}
+
       <div className="flex-1 overflow-y-auto px-12 py-12 custom-scrollbar"><EditorContent editor={editor} /></div>
     </div>
   );
